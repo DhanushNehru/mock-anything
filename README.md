@@ -182,6 +182,11 @@ Each cassette records where it came from, so replay and drift-check route correc
 
 These are deliberate scope lines for a first release, and good first contributions. See [CONTRIBUTING.md](https://github.com/DhanushNehru/mock-anything/blob/main/CONTRIBUTING.md).
 
+## Docs
+
+- [docs/quickstarts.md](docs/quickstarts.md) — copy-paste recipes for Express, Next.js and Python `requests`: point the base URL at an env var, record once, then `verify` offline.
+- [docs/cassette-format.md](docs/cassette-format.md) — the cassette JSON schema field by field (request/response, headers, body, `bodyEncoding`, `recordedAt`, `<redacted>`, matching rules), so you can hand-write or generate cassettes.
+
 ## License
 
 [MIT](https://github.com/DhanushNehru/mock-anything/blob/main/LICENSE)
