@@ -11,7 +11,7 @@ const { main, COMMAND_HELP } = require('../src/cli');
 const { version } = require('../package.json');
 
 const BIN = path.join(__dirname, '..', 'bin', 'mock-anything.js');
-const COMMANDS = ['record', 'serve', 'verify', 'check', 'list', 'import'];
+const COMMANDS = ['record', 'serve', 'verify', 'check', 'list', 'import', 'export'];
 
 function run(args) {
   return spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8' });
