@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-      # The test script is `node --test test/` (no shell glob): cmd.exe on
-      # Windows does not expand globs and Node 18's --test has no glob support.
+      # The test script is `node --test` (no path, no shell glob): the test
+      # runner then discovers test files under the cwd itself, which works the
+      # same on Node 18/20/22 and on Windows (cmd.exe does not expand globs,
+      # and Node 22 treats a bare `test/` directory argument as a module).
       - run: npm test

@@ -27,6 +27,30 @@ function spawnShellFor(platform) {
   return platform === 'win32';
 }
 
+// Quote one argument for a cmd.exe command line so argument boundaries and
+// paths with spaces survive the shell round-trip (cmd /c "...").
+function quoteWinArg(arg) {
+  if (!/[\s"]/.test(arg)) return arg;
+  let out = '"';
+  for (let i = 0; i < arg.length; i++) {
+    const ch = arg[i];
+    if (ch === '"') { out += '\\"'; continue; }
+    if (ch === '\\' && i === arg.length - 1) { out += '\\\\"'; continue; }
+    out += ch;
+  }
+  return out + '"';
+}
+
+// Build the command line for the platform shell: every argument quoted
+// individually on Windows, verbatim argv elsewhere.
+function spawnCommand(command, env) {
+  if (spawnShellFor(process.platform)) {
+    const line = command.map(quoteWinArg).join(' ');
+    return spawn(line, { env, stdio: 'inherit', shell: true });
+  }
+  return spawn(command[0], command.slice(1), { env, stdio: 'inherit', shell: false });
+}
+
 async function runVerify({ port, dir, command }) {
   const mock = await startMockServer({ port, dir });
   await waitForServer(port);
@@ -43,7 +67,7 @@ async function runVerify({ port, dir, command }) {
   };
 
   const code = await new Promise((resolve) => {
-    const child = spawn(command[0], command.slice(1), { env, stdio: 'inherit', shell: spawnShellFor(process.platform) });
+    const child = spawnCommand(command, env);
     child.on('close', resolve);
   });
 
@@ -62,4 +86,4 @@ async function runVerify({ port, dir, command }) {
   return code;
 }
 
-module.exports = { runVerify, spawnShellFor };
+module.exports = { runVerify, spawnShellFor, quoteWinArg, spawnCommand };

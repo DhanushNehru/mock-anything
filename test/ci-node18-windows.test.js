@@ -12,7 +12,7 @@ const fs = require('fs');
 const net = require('net');
 const os = require('os');
 const path = require('path');
-const { spawnShellFor } = require('../src/verify');
+const { spawnShellFor, quoteWinArg } = require('../src/verify');
 const { saveCassette } = require('../src/cassettes');
 
 const ROOT = path.join(__dirname, '..');
@@ -56,11 +56,23 @@ test('CI matrix runs Node 18, 20, 22 on ubuntu and windows', () => {
   assert.match(ci, /ubuntu-latest/, 'ubuntu runner stays');
 });
 
-test('test script does not rely on shell glob expansion', () => {
+test('test script uses the runner built-in discovery, not a path or glob', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   assert.equal(pkg.engines.node, '>=18');
-  assert.match(pkg.scripts.test, /^node --test test\/?$/, 'use `node --test test/` (directory form works on Node 18 and Windows)');
+  // `node --test` with no path makes the runner discover test files itself:
+  // identical on Node 18/20/22 and on Windows (no shell glob, and Node 22
+  // would treat a bare `test/` directory argument as a module).
+  assert.equal(pkg.scripts.test, 'node --test');
   assert.doesNotMatch(pkg.scripts.test, /\*/, 'no glob in the test script');
+});
+
+test('windows shell command line keeps argument boundaries and spaces', () => {
+  assert.equal(quoteWinArg('npm'), 'npm');
+  assert.equal(quoteWinArg('--version'), '--version');
+  assert.equal(quoteWinArg('C:\\Program Files\\nodejs\\node.exe'), '"C:\\Program Files\\nodejs\\node.exe"');
+  const BS = String.fromCharCode(92); // backslash
+  assert.equal(quoteWinArg('say "hi"'), '"say ' + BS + '"hi' + BS + '""');
+  assert.equal(quoteWinArg('C:\\my dir\\tool.cmd'), '"C:\\my dir\\tool.cmd"');
 });
 
 test('sources avoid APIs newer than Node 18', () => {
