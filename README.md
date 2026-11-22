@@ -56,6 +56,8 @@ PASS: the suite ran entirely against recorded responses
 
 `verify` injects `MOCK_ANYTHING_URL` (plus `API_BASE_URL`/`BASE_URL`) so most apps need no code change at all: one environment variable swaps the base URL.
 
+`mock-anything --version` prints the version; `mock-anything --help` prints the global usage, and `mock-anything <command> --help` (e.g. `mock-anything record --help`) prints that command's own flags and an example.
+
 `list` shows what you recorded; `--json` makes it scriptable — a JSON array with `method`, `path`, `status`, `file` and `recordedAt` per cassette, and nothing else on stdout:
 ```sh
 $ mock-anything list --json
