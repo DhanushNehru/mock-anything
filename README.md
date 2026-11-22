@@ -95,9 +95,31 @@ The demo API is fast and nearby, so the gap is modest. Against a real third-part
 - **Credentials never land in cassettes.** `authorization`, `cookie`, `x-api-key` and friends are stored as `<redacted>`; add your own with `MOCK_ANYTHING_REDACT="x-tenant-secret,x-session"`. Cassettes are meant to be committed, and this keeps them safe to commit.
 - **Serving has no fallback.** The mock server contains no code path that talks to the recorded API. A request it doesn't recognize fails loudly with the list of things it does know, which is exactly what you want from a test double.
 
+## Server-Sent Events
+
+`text/event-stream` responses are recorded and replayed as streams, not buffered blobs. While recording, each event is forwarded to your app as it arrives; the cassette stores the ordered chunks plus the joined body, so the file stays readable JSON and `check` can still diff the content:
+
+```json
+"response": {
+  "status": 200,
+  "headers": { "content-type": "text/event-stream" },
+  "body": "data: {\"n\":1}\n\ndata: {\"n\":2}\n\n",
+  "bodyEncoding": "utf8",
+  "stream": true,
+  "chunks": [
+    { "data": "data: {\"n\":1}\n\n", "encoding": "utf8", "delayMs": 0 },
+    { "data": "data: {\"n\":2}\n\n", "encoding": "utf8", "delayMs": 40 }
+  ]
+}
+```
+
+On replay, `serve` writes the chunks one by one with the recorded pacing (each gap capped at 100 ms; set `MOCK_ANYTHING_STREAM_MAX_DELAY_MS=0` to replay instantly), so the client sees the same event framing instead of one buffered write. Normal buffered responses are untouched and still arrive with `content-length`.
+
+A stream ends when the upstream closes it. If the upstream dies or the client disconnects mid-stream, the cassette is kept with `"truncated": true` and whatever chunks arrived. `check` replays a recorded stream against the live API and compares the joined text (chunk splitting is transport detail, not drift); a live stream that never closes is compared after `MOCK_ANYTHING_STREAM_TIMEOUT_MS` (default 30000 ms).
+
 ## What it doesn't do yet
 
-- HTTP only, one upstream per recorder. WebSockets, GraphQL subscriptions and SSE streams aren't recorded.
+- HTTP only, one upstream per recorder. WebSockets and GraphQL subscriptions aren't recorded.
 - Matching is exact on path and body; there's no fuzzy or partial matching, and no scripted responses.
 - Request bodies with non-JSON content types match byte-for-byte.
 

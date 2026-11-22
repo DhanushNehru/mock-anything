@@ -4,6 +4,20 @@ const http = require('http');
 const { loadCassettes, matchKey, decodeBody } = require('./cassettes');
 const { HOP_BY_HOP } = require('./recorder');
 
+// Replayed inter-chunk delays are capped so a recorded pause cannot stall a
+// test suite. Set MOCK_ANYTHING_STREAM_MAX_DELAY_MS=0 to replay instantly.
+function streamDelayCap() {
+  const raw = process.env.MOCK_ANYTHING_STREAM_MAX_DELAY_MS;
+  if (raw === undefined) return 100;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 100;
+}
+
+function decodeChunk(chunk) {
+  if (chunk.encoding === 'base64') return Buffer.from(chunk.data || '', 'base64');
+  return Buffer.from(chunk.data || '', 'utf8');
+}
+
 // Serves recorded responses only. This server has no code path that talks
 // to the recorded API: unmatched requests fail loudly instead of falling
 // through to the network.
@@ -48,9 +62,30 @@ function startMockServer({ port, dir }) {
       for (const [name, value] of Object.entries(cassette.response.headers)) {
         if (!HOP_BY_HOP.has(name)) headers[name] = value;
       }
+      headers['x-mock-anything'] = cassette.file;
+
+      const streamChunks = cassette.response.stream ? cassette.response.chunks : null;
+      if (streamChunks && streamChunks.length > 0) {
+        // Event streams replay chunk by chunk (with the recorded pacing, so
+        // the client sees the same framing) instead of one buffered write.
+        res.writeHead(cassette.response.status, headers);
+        void (async () => {
+          const cap = streamDelayCap();
+          for (const chunk of streamChunks) {
+            if (res.destroyed || res.writableEnded) break;
+            const delayMs = Math.min(chunk.delayMs || 0, cap);
+            if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
+            else await new Promise((r) => setImmediate(r));
+            if (res.destroyed || res.writableEnded) break;
+            res.write(decodeChunk(chunk));
+          }
+          res.end();
+        })();
+        return;
+      }
+
       const payload = decodeBody(cassette.response);
       headers['content-length'] = payload.length;
-      headers['x-mock-anything'] = cassette.file;
       res.writeHead(cassette.response.status, headers);
       res.end(payload);
     });

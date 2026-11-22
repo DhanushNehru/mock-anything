@@ -80,7 +80,8 @@ async function main(argv) {
         return;
       }
       for (const c of cassettes) {
-        console.log(`${c.request.method.padEnd(6)} ${c.request.path.padEnd(40)} -> ${c.response.status}  (${c.file})`);
+        const stream = c.response.stream ? `  [stream, ${c.response.chunks.length} chunks]` : '';
+        console.log(`${c.request.method.padEnd(6)} ${c.request.path.padEnd(40)} -> ${c.response.status}${stream}  (${c.file})`);
       }
       console.log(`${cassettes.length} recorded interactions`);
       break;
