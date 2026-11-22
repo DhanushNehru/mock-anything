@@ -56,6 +56,20 @@ PASS: the suite ran entirely against recorded responses
 
 `verify` injects `MOCK_ANYTHING_URL` (plus `API_BASE_URL`/`BASE_URL`) so most apps need no code change at all: one environment variable swaps the base URL.
 
+`list` shows what you recorded; `--json` makes it scriptable — a JSON array with `method`, `path`, `status`, `file` and `recordedAt` per cassette, and nothing else on stdout:
+```sh
+$ mock-anything list --json
+[
+  {
+    "method": "GET",
+    "path": "/posts/1",
+    "status": 200,
+    "file": "0001-get-posts-1.json",
+    "recordedAt": "2026-11-22T06:30:07.085Z"
+  }
+]
+```
+
 ## Commands
 
 | command | what it does |
@@ -64,7 +78,7 @@ PASS: the suite ran entirely against recorded responses
 | `serve` | answers from cassettes only; unmatched requests get a loud 502, never a silent fallthrough |
 | `verify -- <cmd>` | starts `serve`, runs your test command against it, reports which cassettes were (and weren't) used |
 | `check --target <url>` | replays every recorded request against the live API and reports drift, field by field |
-| `list` | prints the recorded interactions |
+| `list [--json]` | prints the recorded interactions as a table, or as a JSON array with `--json` |
 
 ## Caught in the act
 
