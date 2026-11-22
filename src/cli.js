@@ -17,7 +17,7 @@ Usage:
   mock-anything record --target api=<url> --prefix api=/stripe \
                        --target auth=<url> --prefix auth=/auth   (multiple upstreams)
   mock-anything serve [--port 8080] [--dir ./mocks]
-  mock-anything verify [--port 8080] [--dir ./mocks] [--strict] -- <test command>
+  mock-anything verify [--port 8080] [--dir ./mocks] [--strict] [--env-var NAME]... -- <test command>
   mock-anything check [--target <url>] [--dir ./mocks]
   mock-anything list [--dir ./mocks] [--json]
   mock-anything import <file.har> [--dir ./mocks]
@@ -32,6 +32,7 @@ Commands:
   serve    answers from cassettes only; never touches the network
   verify   starts serve, runs your test command against it, reports cassette coverage
            (--strict exits 1 when any cassette goes unused)
+           (--env-var NAME repeats: also set NAME to the mock URL for the child)
   check    replays recordings against the live API and reports drift
            (each cassette goes to the upstream it was recorded from;
             --target is only needed for old single-target cassettes)
@@ -80,12 +81,13 @@ Example:
   verify: `mock-anything verify - starts serve, runs your test command against it, reports cassette coverage.
 
 Usage:
-  mock-anything verify [--port 8080] [--dir ./mocks] [--strict] -- <test command>
+  mock-anything verify [--port 8080] [--dir ./mocks] [--strict] [--env-var NAME]... -- <test command>
 
 Flags:
   --port <n>    port for the mock server (default 8080)
   --dir <path>  cassette root directory (default ./mocks)
   --strict     fail if any cassette is unused
+  --env-var <NAME>  also set NAME to the mock URL; repeat as needed
   -- <command>  the test command to run; MOCK_ANYTHING_URL points at the mock
 
 Example:
@@ -133,10 +135,10 @@ Example:
 // Flags parseFlags understands. When adding a flag, add it here and to USAGE;
 // anything else starting with "--" is rejected instead of silently dropped,
 // so a typo like --targt fails fast instead of causing a confusing later error.
-const KNOWN_FLAGS = new Set(['--target', '--port', '--dir', '--json', '--prefix', '--strict']);
+const KNOWN_FLAGS = new Set(['--target', '--port', '--dir', '--json', '--prefix', '--strict', '--env-var']);
 
 function parseFlags(args) {
-  const flags = { port: 8080, dir: './mocks', json: false, strict: false, targets: [], prefixes: [] };
+  const flags = { port: 8080, dir: './mocks', json: false, strict: false, envVars: [], targets: [], prefixes: [] };
   const rest = [];
   const unknown = [];
   for (let i = 0; i < args.length; i++) {
@@ -149,6 +151,11 @@ function parseFlags(args) {
     else if (a === '--dir') flags.dir = args[++i];
     else if (a === '--json') flags.json = true;
     else if (a === '--strict') flags.strict = true;
+    else if (a === '--env-var') {
+      const name = args[++i];
+      if (name === undefined) throw new Error('--env-var needs a variable name, e.g. --env-var VITE_API_URL');
+      flags.envVars.push(name);
+    }
     else if (a.startsWith('--') && a !== '--' && !KNOWN_FLAGS.has(a)) unknown.push(a);
     else rest.push(a);
   }
@@ -193,7 +200,7 @@ async function main(argv) {
     }
     const { flags, unknown } = parseFlags(argv.slice(1, sep));
     assertKnownFlags(unknown);
-    await runVerify({ port: flags.port, dir: flags.dir, strict: flags.strict, command: argv.slice(sep + 1) });
+    await runVerify({ port: flags.port, dir: flags.dir, strict: flags.strict, envVars: flags.envVars, command: argv.slice(sep + 1) });
     return;
   }
 
