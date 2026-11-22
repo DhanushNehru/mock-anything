@@ -21,7 +21,7 @@ generate, or post-process cassettes without reading `src/cassettes.js`.
 | `request` | object | yes | the recorded request (below) |
 | `response` | object | yes | the recorded response (below) |
 | `recordedAt` | string | yes | ISO 8601 UTC timestamp of when the exchange was recorded, e.g. `"2026-11-22T06:30:07.085Z"` |
-| `upstream` | object | no | only on cassettes from a multi-upstream recording or a HAR import: `{ "name", "target", "prefix", "path" }` — which upstream the request was routed to and the path after the prefix |
+| `upstream` | object | no | only on cassettes from a multi-upstream `record` session: `{ "name", "target", "prefix", "path" }` — which upstream the request was routed to and the path after the prefix. **HAR import does not store `upstream` metadata.** |
 
 `file` and `key` are added in memory by `list`/`serve`; they are not stored in
 the file.
@@ -41,7 +41,7 @@ the file.
 | field | type | meaning |
 |---|---|---|
 | `status` | number | HTTP status code, e.g. `200` |
-| `headers` | object | response headers, lowercased, hop-by-hop headers dropped, sensitive values `"<redacted>"` |
+| `headers` | object | **required** — response headers, lowercased, hop-by-hop headers dropped, sensitive values `"<redacted>"`. `serve` reads this field directly and crashes on a cassette without it; use `{}` when the response had no headers worth keeping. |
 | `body` | string | response body; joined text for streams (see `chunks`) |
 | `bodyEncoding` | `"utf8"` \| `"base64"` | same rule as the request body |
 | `stream` | `true` | optional; present only for `text/event-stream` responses |

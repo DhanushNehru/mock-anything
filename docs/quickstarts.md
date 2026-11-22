@@ -50,6 +50,10 @@ and in Node-based tests (`npm test`, Jest/Vitest) the injected
 
 ```sh
 mock-anything record --target https://api.example.com --port 8080
+# in another shell, capture the traffic by running the suite against the recorder:
+API_BASE_URL=http://localhost:8080 npm test
+#   (or open the app with NEXT_PUBLIC_API_URL=http://localhost:8080 npm run dev)
+# stop the recorder (Ctrl-C) before verify — verify serves on port 8080 too
 mock-anything verify -- npm test           # sets MOCK_ANYTHING_URL for the test run
 ```
 
@@ -74,6 +78,9 @@ def test_get_post():
 
 ```sh
 mock-anything record --target https://api.example.com --port 8080
+# in another shell, capture the traffic by running the suite against the recorder:
+BASE_URL=http://localhost:8080 python3 -m pytest
+# stop the recorder (Ctrl-C) before verify — verify serves on port 8080 too
 mock-anything verify -- python3 -m pytest
 ```
 
