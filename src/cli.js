@@ -8,6 +8,8 @@ const { loadCassettes } = require('./cassettes');
 const { importHarFile } = require('./har');
 const { buildRoutes } = require('./routes');
 
+const VERSION = require('../package.json').version;
+
 const USAGE = `mock-anything - record real API traffic, replay it offline, prove your tests still pass.
 
 Usage:
@@ -19,6 +21,8 @@ Usage:
   mock-anything check [--target <url>] [--dir ./mocks]
   mock-anything list [--dir ./mocks] [--json]
   mock-anything import <file.har> [--dir ./mocks]
+  mock-anything --version                     print the version and exit
+  mock-anything <command> --help              command-specific flags and an example
 
 Commands:
   record   forward proxy: records every request/response to cassettes
@@ -38,6 +42,93 @@ Environment:
   MOCK_ANYTHING_URL       set by verify; point your app's base URL at it
   MOCK_ANYTHING_REDACT    extra comma-separated header names to strip while recording
 `;
+
+const COMMANDS = new Set(['record', 'serve', 'verify', 'check', 'list', 'import']);
+
+// Per-command help: short usage block with the flags that command actually
+// accepts plus a copy-pasteable example. `mock-anything <command> --help`.
+const COMMAND_HELP = {
+  record: `mock-anything record - forward proxy: records every request/response to cassettes.
+
+Usage:
+  mock-anything record --target <url> [--port 8080] [--dir ./mocks]
+  mock-anything record --target api=<url> --prefix api=/stripe \
+                       --target auth=<url> --prefix auth=/auth   (multiple upstreams)
+
+Flags:
+  --target <url>    upstream to record; repeat as name=<url> to front several
+                    upstreams, a plain --target stays the default route
+  --prefix <path>   path prefix for a named target, e.g. --prefix api=/stripe
+  --port <n>        local port to listen on (default 8080)
+  --dir <path>      cassette root directory (default ./mocks)
+
+Example:
+  mock-anything record --target https://api.example.com --port 8080 --dir ./mocks
+`,
+  serve: `mock-anything serve - answers from cassettes only; never touches the network.
+
+Usage:
+  mock-anything serve [--port 8080] [--dir ./mocks]
+
+Flags:
+  --port <n>    port to serve on (default 8080)
+  --dir <path>  cassette root directory (default ./mocks)
+
+Example:
+  mock-anything serve --port 8080 --dir ./mocks
+`,
+  verify: `mock-anything verify - starts serve, runs your test command against it, reports cassette coverage.
+
+Usage:
+  mock-anything verify [--port 8080] [--dir ./mocks] [--strict] -- <test command>
+
+Flags:
+  --port <n>    port for the mock server (default 8080)
+  --dir <path>  cassette root directory (default ./mocks)
+  --strict     fail if any cassette is unused
+  -- <command>  the test command to run; MOCK_ANYTHING_URL points at the mock
+
+Example:
+  mock-anything verify --port 8080 --dir ./mocks -- npm test
+`,
+  check: `mock-anything check - replays recordings against the live API and reports drift.
+
+Usage:
+  mock-anything check [--target <url>] [--dir ./mocks]
+
+Flags:
+  --target <url>  upstream for old single-target cassettes; cassettes recorded
+                  with named targets go to the upstream they came from
+  --dir <path>    cassette root directory (default ./mocks)
+
+Example:
+  mock-anything check --target https://api.example.com --dir ./mocks
+`,
+  list: `mock-anything list - prints the recorded interactions.
+
+Usage:
+  mock-anything list [--dir ./mocks] [--json]
+
+Flags:
+  --dir <path>  cassette root directory (default ./mocks)
+  --json        emit a JSON array on stdout for scripting (e.g. | jq)
+
+Example:
+  mock-anything list --dir ./mocks --json
+`,
+  import: `mock-anything import - converts a HAR 1.2 capture (browser/Proxyman/Charles/mitmproxy) into cassettes.
+
+Usage:
+  mock-anything import <file.har> [--dir ./mocks]
+
+Flags:
+  <file.har>    HAR file to convert (positional)
+  --dir <path>  cassette root directory (default ./mocks)
+
+Example:
+  mock-anything import capture.har --dir ./mocks
+`,
+};
 
 // Flags parseFlags understands. When adding a flag, add it here and to USAGE;
 // anything else starting with "--" is rejected instead of silently dropped,
@@ -75,6 +166,24 @@ async function main(argv) {
   if (!command || command === 'help' || command === '--help' || command === '-h') {
     process.stdout.write(USAGE);
     return;
+  }
+
+  if (command === '--version' || command === '-v') {
+    process.stdout.write(VERSION + '\n');
+    return;
+  }
+
+  // `mock-anything <command> --help` prints that command's own usage block.
+  // For verify, only args before the "--" separator count, so a test command
+  // like `verify -- npm test --help` is never mistaken for a help request.
+  if (COMMANDS.has(command)) {
+    const sep = command === 'verify' ? argv.indexOf('--') : -1;
+    const end = sep === -1 ? argv.length : sep;
+    const beforeSep = argv.slice(1, end);
+    if (beforeSep.includes('--help') || beforeSep.includes('-h')) {
+      process.stdout.write(COMMAND_HELP[command]);
+      return;
+    }
   }
 
   if (command === 'verify') {
@@ -150,4 +259,4 @@ async function main(argv) {
   }
 }
 
-module.exports = { main, parseFlags };
+module.exports = { main, parseFlags, COMMAND_HELP, VERSION };
