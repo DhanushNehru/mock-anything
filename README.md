@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/node-%3E%3D18-339933" alt="Node 18+">
   <img src="https://img.shields.io/badge/dependencies-0-2563eb" alt="zero dependencies">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-555" alt="MIT"></a>
+  <a href="https://github.com/DhanushNehru/mock-anything/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-555" alt="MIT"></a>
 </p>
 
 Suites that hit live third-party APIs are slow, flaky, rate-limited and useless on a plane. Hand-rolled mocks fix that and then quietly rot: the API changes, the mock doesn't, and your tests pass against a fiction.
@@ -11,6 +11,12 @@ Suites that hit live third-party APIs are slow, flaky, rate-limited and useless 
 **mock-anything** records your app's real HTTP traffic once, replays it from a local mock server forever, and proves two things: your suite passes with the network gone, and your recordings still match the live API. Zero dependencies, one binary, plain JSON cassettes you can diff and commit.
 
 ## Install
+
+```sh
+npm install -g mock-anything-cli
+```
+
+Or build from source:
 
 ```sh
 git clone https://github.com/DhanushNehru/mock-anything.git
@@ -80,7 +86,7 @@ JSON responses get a structural diff down to the field. Exit code 1 on drift, so
 
 ## Real runs
 
-From the demo in [`examples/posts-demo`](examples/posts-demo): a three-test suite against a live public API, then the same suite fully replayed. Median of 5 runs on an ordinary cloud box, `node --test` only:
+From the demo in [`examples/posts-demo`](https://github.com/DhanushNehru/mock-anything/tree/main/examples/posts-demo): a three-test suite against a live public API, then the same suite fully replayed. Median of 5 runs on an ordinary cloud box, `node --test` only:
 
 | suite run | live API | replayed |
 |---|---|---|
@@ -101,8 +107,8 @@ The demo API is fast and nearby, so the gap is modest. Against a real third-part
 - Matching is exact on path and body; there's no fuzzy or partial matching, and no scripted responses.
 - Request bodies with non-JSON content types match byte-for-byte.
 
-These are deliberate scope lines for a first release, and good first contributions. See [CONTRIBUTING.md](CONTRIBUTING.md).
+These are deliberate scope lines for a first release, and good first contributions. See [CONTRIBUTING.md](https://github.com/DhanushNehru/mock-anything/blob/main/CONTRIBUTING.md).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/DhanushNehru/mock-anything/blob/main/LICENSE)
