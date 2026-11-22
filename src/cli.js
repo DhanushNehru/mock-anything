@@ -4,7 +4,8 @@ const { startRecorder } = require('./recorder');
 const { startMockServer } = require('./server');
 const { runVerify } = require('./verify');
 const { runCheck } = require('./check');
-const { loadCassettes } = require('./cassettes');
+const fs = require('fs');
+const { loadCassettes, cassettesToHar } = require('./cassettes');
 
 const USAGE = `mock-anything - record real API traffic, replay it offline, prove your tests still pass.
 
@@ -14,6 +15,7 @@ Usage:
   mock-anything verify [--port 8080] [--dir ./mocks] -- <test command>
   mock-anything check --target <url> [--dir ./mocks]
   mock-anything list [--dir ./mocks]
+  mock-anything export --har <file> [--dir ./mocks]
 
 Commands:
   record   forward proxy: records every request/response to cassettes
@@ -21,6 +23,7 @@ Commands:
   verify   starts serve, runs your test command against it, reports cassette coverage
   check    replays recordings against the live API and reports drift
   list     prints the recorded interactions
+  export   writes the cassettes as a HAR 1.2 file (open it in browser devtools)
 
 Environment:
   MOCK_ANYTHING_URL       set by verify; point your app's base URL at it
@@ -35,6 +38,11 @@ function parseFlags(args) {
     if (a === '--target') flags.target = args[++i];
     else if (a === '--port') flags.port = parseInt(args[++i], 10);
     else if (a === '--dir') flags.dir = args[++i];
+    else if (a === '--har') {
+      const file = args[++i];
+      if (file === undefined) throw new Error('--har needs a file path, e.g. --har out.har');
+      flags.har = file;
+    }
     else rest.push(a);
   }
   return { flags, rest };
@@ -83,6 +91,17 @@ async function main(argv) {
         console.log(`${c.request.method.padEnd(6)} ${c.request.path.padEnd(40)} -> ${c.response.status}  (${c.file})`);
       }
       console.log(`${cassettes.length} recorded interactions`);
+      break;
+    }
+    case 'export': {
+      if (!flags.har) throw new Error('export needs --har <file>, e.g. mock-anything export --har out.har');
+      const cassettes = loadCassettes(flags.dir);
+      if (cassettes.length === 0) {
+        throw new Error(`no cassettes found in ${flags.dir}/cassettes - run "mock-anything record" first`);
+      }
+      const har = cassettesToHar(cassettes);
+      fs.writeFileSync(flags.har, JSON.stringify(har, null, 2) + '\n');
+      console.log(`exported ${cassettes.length} interactions to ${flags.har}`);
       break;
     }
     default:

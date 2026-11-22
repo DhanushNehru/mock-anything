@@ -97,4 +97,90 @@ function decodeBody(entry) {
   return Buffer.from(entry.body || '', 'utf8');
 }
 
-module.exports = { saveCassette, loadCassettes, matchKey, canonicalBody, decodeBody, cassetteDir };
+// --- HAR 1.2 export ---------------------------------------------------------
+
+function headersToHarArray(headers) {
+  return Object.entries(headers || {}).map(([name, value]) => ({ name, value: String(value) }));
+}
+
+// One cassette -> one HAR entry. Cassette request paths are origin-less, so
+// the recorded host header (kept by the recorder) supplies the origin; without
+// one we fall back to localhost. Bodies stored base64 keep their base64 text
+// and gain "encoding": "base64" per HAR 1.2, so devtools decodes them; textual
+// bodies export as plain text.
+function cassetteToHarEntry(cassette) {
+  const host = (cassette.request.headers && cassette.request.headers.host) || 'localhost';
+  const url = new URL(cassette.request.path, `http://${host}`);
+  const reqBody = cassette.request.body || '';
+  const resBody = cassette.response.body || '';
+  const reqType = (cassette.request.headers && cassette.request.headers['content-type']) || '';
+  const resType = (cassette.response.headers && cassette.response.headers['content-type']) || '';
+  const reqBytes = decodeBody(cassette.request);
+  const resBytes = decodeBody(cassette.response);
+  const reqBase64 = cassette.request.bodyEncoding === 'base64';
+  const resBase64 = cassette.response.bodyEncoding === 'base64';
+  return {
+    startedDateTime: cassette.recordedAt || new Date().toISOString(),
+    time: 0,
+    request: {
+      method: cassette.request.method,
+      url: url.toString(),
+      httpVersion: 'HTTP/1.1',
+      headers: headersToHarArray(cassette.request.headers),
+      queryString: [...url.searchParams].map(([name, value]) => ({ name, value })),
+      cookies: [],
+      headersSize: -1,
+      bodySize: reqBytes.length,
+      ...(reqBody
+        ? {
+            postData: {
+              mimeType: reqType || 'application/octet-stream',
+              ...(reqBase64 ? { encoding: 'base64' } : {}),
+              text: reqBody,
+            },
+          }
+        : {}),
+    },
+    response: {
+      status: cassette.response.status,
+      statusText: '',
+      httpVersion: 'HTTP/1.1',
+      headers: headersToHarArray(cassette.response.headers),
+      content: {
+        size: resBytes.length,
+        mimeType: resType || 'application/octet-stream',
+        ...(resBase64 ? { encoding: 'base64' } : {}),
+        text: resBody,
+      },
+      redirectURL: '',
+      headersSize: -1,
+      bodySize: resBytes.length,
+    },
+    cache: {},
+    timings: { send: 0, wait: 0, receive: 0 },
+  };
+}
+
+// The whole cassette directory as one HAR 1.2 document, in recorded order.
+function cassettesToHar(cassettes) {
+  const first = (cassettes[0] && cassettes[0].recordedAt) || new Date().toISOString();
+  return {
+    log: {
+      version: '1.2',
+      creator: { name: 'mock-anything', version: require('../package.json').version },
+      pages: [{ startedDateTime: first, id: 'page_1', title: 'mock-anything recording' }],
+      entries: cassettes.map(cassetteToHarEntry),
+    },
+  };
+}
+
+module.exports = {
+  saveCassette,
+  loadCassettes,
+  matchKey,
+  canonicalBody,
+  decodeBody,
+  cassetteDir,
+  cassettesToHar,
+  cassetteToHarEntry,
+};

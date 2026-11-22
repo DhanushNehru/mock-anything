@@ -65,6 +65,7 @@ PASS: the suite ran entirely against recorded responses
 | `verify -- <cmd>` | starts `serve`, runs your test command against it, reports which cassettes were (and weren't) used |
 | `check --target <url>` | replays every recorded request against the live API and reports drift, field by field |
 | `list` | prints the recorded interactions |
+| `export --har <file>` | writes the cassettes as a HAR 1.2 file, so recordings open in browser devtools or share with people who don't use mock-anything |
 
 ## Caught in the act
 
