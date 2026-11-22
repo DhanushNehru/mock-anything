@@ -5,6 +5,7 @@ const { startMockServer } = require('./server');
 const { runVerify } = require('./verify');
 const { runCheck } = require('./check');
 const { loadCassettes } = require('./cassettes');
+const { importHarFile } = require('./har');
 
 const USAGE = `mock-anything - record real API traffic, replay it offline, prove your tests still pass.
 
@@ -14,6 +15,8 @@ Usage:
   mock-anything verify [--port 8080] [--dir ./mocks] -- <test command>
   mock-anything check --target <url> [--dir ./mocks]
   mock-anything list [--dir ./mocks] [--json]
+  mock-anything list [--dir ./mocks]
+  mock-anything import <file.har> [--dir ./mocks]
 
 Commands:
   record   forward proxy: records every request/response to cassettes
@@ -21,6 +24,7 @@ Commands:
   verify   starts serve, runs your test command against it, reports cassette coverage
   check    replays recordings against the live API and reports drift
   list     prints the recorded interactions (--json emits a JSON array for scripting)
+  import   converts a HAR 1.2 capture (browser/Proxyman/Charles/mitmproxy) into cassettes
 
 Environment:
   MOCK_ANYTHING_URL       set by verify; point your app's base URL at it
@@ -58,7 +62,7 @@ async function main(argv) {
     return;
   }
 
-  const { flags } = parseFlags(argv.slice(1));
+  const { flags, rest } = parseFlags(argv.slice(1));
 
   switch (command) {
     case 'record':
@@ -97,6 +101,16 @@ async function main(argv) {
         console.log(`${c.request.method.padEnd(6)} ${c.request.path.padEnd(40)} -> ${c.response.status}  (${c.file})`);
       }
       console.log(`${cassettes.length} recorded interactions`);
+      break;
+    }
+    case 'import': {
+      const harFile = rest[0];
+      if (!harFile) throw new Error('import needs a HAR file, e.g. mock-anything import capture.har');
+      const written = importHarFile(harFile, flags.dir);
+      for (const w of written) {
+        console.log(`imported ${w.cassette.request.method} ${w.cassette.request.path} -> ${w.cassette.response.status}  (${w.file})`);
+      }
+      console.log(`imported ${written.length} entries from ${harFile} into ${flags.dir}/cassettes`);
       break;
     }
     default:

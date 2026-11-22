@@ -69,6 +69,12 @@ $ mock-anything list --json
   }
 ]
 ```
+Already have a capture? Import it instead of re-recording — record in the browser, replay in CI:
+```sh
+mock-anything import capture.har          # writes mocks/cassettes/0001-*.json ...
+mock-anything verify -- npm test          # works unchanged on the imported cassettes
+```
+`import` decodes bodies (including base64 and gzip/deflate/brotli transfer encodings), applies the same credential redaction as recording, and keeps the capture order for repeated identical requests.
 
 ## Commands
 
@@ -79,6 +85,7 @@ $ mock-anything list --json
 | `verify -- <cmd>` | starts `serve`, runs your test command against it, reports which cassettes were (and weren't) used |
 | `check --target <url>` | replays every recorded request against the live API and reports drift, field by field |
 | `list [--json]` | prints the recorded interactions as a table, or as a JSON array with `--json` |
+| `import <file.har>` | converts a HAR 1.2 capture (browser devtools, Proxyman, Charles, mitmproxy) into cassettes |
 
 ## Caught in the act
 
