@@ -66,6 +66,9 @@ PASS: the suite ran entirely against recorded responses
 | `check --target <url>` | replays every recorded request against the live API and reports drift, field by field |
 | `list` | prints the recorded interactions |
 
+Unknown `--flags` are rejected with an error naming them — a typo like `--targt`
+fails fast with the usage instead of being silently ignored.
+
 ## Caught in the act
 
 Mocks go stale silently. `check` is the alarm. Here a cassette's recorded title no longer matches what the API returns:
