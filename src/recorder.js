@@ -4,6 +4,7 @@ const http = require('http');
 const https = require('https');
 const zlib = require('zlib');
 const { saveCassette } = require('./cassettes');
+const { friendlyListenError } = require('./errors');
 const { redactHeaders } = require('./redact');
 const { matchRoute, upstreamPath, singleRoute } = require('./routes');
 
@@ -199,7 +200,7 @@ function startRecorder({ target, routes, port, dir }) {
   });
 
   return new Promise((resolve, reject) => {
-    server.on('error', reject);
+    server.on('error', (err) => reject(friendlyListenError(err, port)));
     server.listen(port, () => {
       console.log(`mock-anything record: forwarding http://localhost:${port}`);
       for (const r of table) {

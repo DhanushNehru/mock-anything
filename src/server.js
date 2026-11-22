@@ -3,6 +3,7 @@
 const http = require('http');
 const { loadCassettes, matchKey, decodeBody } = require('./cassettes');
 const { HOP_BY_HOP } = require('./recorder');
+const { friendlyListenError } = require('./errors');
 
 // Replayed inter-chunk delays are capped so a recorded pause cannot stall a
 // test suite. Set MOCK_ANYTHING_STREAM_MAX_DELAY_MS=0 to replay instantly.
@@ -92,7 +93,7 @@ function startMockServer({ port, dir }) {
   });
 
   return new Promise((resolve, reject) => {
-    server.on('error', reject);
+    server.on('error', (err) => reject(friendlyListenError(err, port)));
     server.listen(port, () => {
       resolve({
         server,
@@ -106,4 +107,4 @@ function startMockServer({ port, dir }) {
   });
 }
 
-module.exports = { startMockServer };
+module.exports = { startMockServer, friendlyListenError };

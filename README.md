@@ -87,6 +87,9 @@ mock-anything verify -- npm test          # works unchanged on the imported cass
 | `list [--json]` | prints the recorded interactions as a table, or as a JSON array with `--json` |
 | `import <file.har>` | converts a HAR 1.2 capture (browser devtools, Proxyman, Charles, mitmproxy) into cassettes |
 
+If a command's port is busy you get an actionable message, e.g.
+`port 8080 is already in use - pick another with --port`, for `record`, `serve` and `verify`.
+
 ## Caught in the act
 
 Mocks go stale silently. `check` is the alarm. Here a cassette's recorded title no longer matches what the API returns:
