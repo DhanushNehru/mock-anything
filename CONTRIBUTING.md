@@ -26,4 +26,8 @@ cd mock-anything
 npm test
 ```
 
+CI runs `npm test` on Node 18, 20 and 22 on both ubuntu-latest and
+windows-latest, so keep the code and the test script compatible with Node 18
+and Windows (no shell globs in npm scripts: cmd.exe does not expand them).
+
 The CLI is plain Node.js (18+) in `bin/` and `src/`. No build step.

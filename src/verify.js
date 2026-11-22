@@ -19,6 +19,14 @@ function waitForServer(port, tries = 50) {
   });
 }
 
+// On Windows the npm/npx bins are .cmd shims that CreateProcess cannot launch
+// directly, so the test command must go through the platform shell there.
+// Everywhere else keep shell:false so arguments are passed verbatim without
+// quoting surprises.
+function spawnShellFor(platform) {
+  return platform === 'win32';
+}
+
 async function runVerify({ port, dir, command }) {
   const mock = await startMockServer({ port, dir });
   await waitForServer(port);
@@ -35,7 +43,7 @@ async function runVerify({ port, dir, command }) {
   };
 
   const code = await new Promise((resolve) => {
-    const child = spawn(command[0], command.slice(1), { env, stdio: 'inherit', shell: false });
+    const child = spawn(command[0], command.slice(1), { env, stdio: 'inherit', shell: spawnShellFor(process.platform) });
     child.on('close', resolve);
   });
 
@@ -54,4 +62,4 @@ async function runVerify({ port, dir, command }) {
   return code;
 }
 
-module.exports = { runVerify };
+module.exports = { runVerify, spawnShellFor };
