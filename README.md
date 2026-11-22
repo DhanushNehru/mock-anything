@@ -54,7 +54,10 @@ cassettes used: 3/3
 PASS: the suite ran entirely against recorded responses
 ```
 
-`verify` injects `MOCK_ANYTHING_URL` (plus `API_BASE_URL`/`BASE_URL`) so most apps need no code change at all: one environment variable swaps the base URL.
+`verify` injects `MOCK_ANYTHING_URL` (plus `API_BASE_URL`/`BASE_URL`) so most apps need no code change at all: one environment variable swaps the base URL. Apps that read something else can name extra variables — repeatable, each set to the mock URL for the child process:
+```sh
+mock-anything verify --env-var VITE_API_URL --env-var NEXT_PUBLIC_API_URL -- npm test
+```
 
 `mock-anything --version` prints the version; `mock-anything --help` prints the global usage, and `mock-anything <command> --help` (e.g. `mock-anything record --help`) prints that command's own flags and an example.
 
