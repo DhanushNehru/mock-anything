@@ -11,7 +11,7 @@ const USAGE = `mock-anything - record real API traffic, replay it offline, prove
 Usage:
   mock-anything record --target <url> [--port 8080] [--dir ./mocks]
   mock-anything serve [--port 8080] [--dir ./mocks]
-  mock-anything verify [--port 8080] [--dir ./mocks] -- <test command>
+  mock-anything verify [--port 8080] [--dir ./mocks] [--env-var NAME]... -- <test command>
   mock-anything check --target <url> [--dir ./mocks]
   mock-anything list [--dir ./mocks]
 
@@ -19,6 +19,7 @@ Commands:
   record   forward proxy: records every request/response to cassettes
   serve    answers from cassettes only; never touches the network
   verify   starts serve, runs your test command against it, reports cassette coverage
+           (--env-var NAME repeats: also set NAME to the mock URL for the child)
   check    replays recordings against the live API and reports drift
   list     prints the recorded interactions
 
@@ -28,13 +29,18 @@ Environment:
 `;
 
 function parseFlags(args) {
-  const flags = { port: 8080, dir: './mocks' };
+  const flags = { port: 8080, dir: './mocks', envVars: [] };
   const rest = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--target') flags.target = args[++i];
     else if (a === '--port') flags.port = parseInt(args[++i], 10);
     else if (a === '--dir') flags.dir = args[++i];
+    else if (a === '--env-var') {
+      const name = args[++i];
+      if (name === undefined) throw new Error('--env-var needs a variable name, e.g. --env-var VITE_API_URL');
+      flags.envVars.push(name);
+    }
     else rest.push(a);
   }
   return { flags, rest };
@@ -53,7 +59,7 @@ async function main(argv) {
       throw new Error('verify needs a test command after "--", e.g. mock-anything verify -- npm test');
     }
     const { flags } = parseFlags(argv.slice(1, sep));
-    await runVerify({ port: flags.port, dir: flags.dir, command: argv.slice(sep + 1) });
+    await runVerify({ port: flags.port, dir: flags.dir, envVars: flags.envVars, command: argv.slice(sep + 1) });
     return;
   }
 

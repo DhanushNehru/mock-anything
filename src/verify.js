@@ -19,7 +19,7 @@ function waitForServer(port, tries = 50) {
   });
 }
 
-async function runVerify({ port, dir, command }) {
+async function runVerify({ port, dir, command, envVars = [] }) {
   const mock = await startMockServer({ port, dir });
   await waitForServer(port);
   const url = `http://localhost:${port}`;
@@ -33,6 +33,14 @@ async function runVerify({ port, dir, command }) {
     API_BASE_URL: url,
     BASE_URL: url,
   };
+  // Extra variables named with --env-var (repeatable), e.g. VITE_API_URL.
+  // Validated so a typo cannot inject something weird into the child env.
+  for (const name of envVars) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      throw new Error(`invalid --env-var name ${JSON.stringify(name)}: must match [A-Za-z_][A-Za-z0-9_]*`);
+    }
+    env[name] = url;
+  }
 
   const code = await new Promise((resolve) => {
     const child = spawn(command[0], command.slice(1), { env, stdio: 'inherit', shell: false });
