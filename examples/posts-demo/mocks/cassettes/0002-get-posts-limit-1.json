@@ -1,0 +1,47 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/posts?_limit=1",
+    "headers": {
+      "host": "localhost:8484",
+      "connection": "keep-alive",
+      "accept": "*/*",
+      "accept-language": "*",
+      "sec-fetch-mode": "cors",
+      "user-agent": "node",
+      "accept-encoding": "gzip, deflate"
+    },
+    "body": "",
+    "bodyEncoding": "utf8"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "date": "Sun, 22 Nov 2026 06:30:06 GMT",
+      "content-type": "application/json; charset=utf-8",
+      "access-control-allow-credentials": "true",
+      "access-control-expose-headers": "X-Total-Count",
+      "cache-control": "max-age=43200",
+      "etag": "W/\"134-QtF0EaiifRh1Z3cEspXIXV0RoQY\"",
+      "expires": "-1",
+      "pragma": "no-cache",
+      "vary": "Origin, Accept-Encoding",
+      "x-content-type-options": "nosniff",
+      "x-powered-by": "Express",
+      "x-ratelimit-limit": "3600000",
+      "x-ratelimit-remaining": "3599999",
+      "x-ratelimit-reset": "1790812826",
+      "x-total-count": "100",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=yEqHu%2FEITHcnPfBxS4qmVLe6FsIo2O1XQSf69dJ8Qe1FUJDxhd7HbhVPVVxpCMuGwWsAm%2BOQmORPT1gSLt2hH1Px7C%2Be1%2Ffgq96SfDLhG1LEnw9AWd33FZjIpMpQzwTEtJkHEcisDBHWP3zmWXdj\"}]}",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "age": "12293",
+      "cf-cache-status": "HIT",
+      "server": "cloudflare",
+      "cf-ray": "a5e5e2346d4197a5-PDX",
+      "alt-svc": "h3=\":443\"; ma=86400"
+    },
+    "body": "[\n  {\n    \"userId\": 1,\n    \"id\": 1,\n    \"title\": \"sunt aut facere repellat provident occaecati excepturi optio reprehenderit\",\n    \"body\": \"quia et suscipit\\nsuscipit recusandae consequuntur expedita et cum\\nreprehenderit molestiae ut ut quas totam\\nnostrum rerum est autem sunt rem eveniet architecto\"\n  }\n]",
+    "bodyEncoding": "utf8"
+  },
+  "recordedAt": "2026-11-22T06:30:06.795Z"
+}
