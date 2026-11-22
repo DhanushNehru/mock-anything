@@ -3,6 +3,7 @@
 const http = require('http');
 const { loadCassettes, matchKey, decodeBody } = require('./cassettes');
 const { HOP_BY_HOP } = require('./recorder');
+const { friendlyListenError } = require('./errors');
 
 // Serves recorded responses only. This server has no code path that talks
 // to the recorded API: unmatched requests fail loudly instead of falling
@@ -57,7 +58,7 @@ function startMockServer({ port, dir }) {
   });
 
   return new Promise((resolve, reject) => {
-    server.on('error', reject);
+    server.on('error', (err) => reject(friendlyListenError(err, port)));
     server.listen(port, () => {
       resolve({
         server,
@@ -71,4 +72,4 @@ function startMockServer({ port, dir }) {
   });
 }
 
-module.exports = { startMockServer };
+module.exports = { startMockServer, friendlyListenError };

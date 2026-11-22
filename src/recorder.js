@@ -4,6 +4,7 @@ const http = require('http');
 const https = require('https');
 const zlib = require('zlib');
 const { saveCassette } = require('./cassettes');
+const { friendlyListenError } = require('./errors');
 const { redactHeaders } = require('./redact');
 
 const TEXTUAL = /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded)|image\/svg)/;
@@ -102,7 +103,7 @@ function startRecorder({ target, port, dir }) {
   });
 
   return new Promise((resolve, reject) => {
-    server.on('error', reject);
+    server.on('error', (err) => reject(friendlyListenError(err, port)));
     server.listen(port, () => {
       console.log(`mock-anything record: forwarding http://localhost:${port} -> ${target}`);
       console.log(`point your app's API base URL at http://localhost:${port} and exercise it. Ctrl-C to stop.`);
