@@ -62,7 +62,7 @@ PASS: the suite ran entirely against recorded responses
 |---|---|
 | `record --target <url>` | forwarding proxy that records every request and response to `mocks/cassettes/` |
 | `serve` | answers from cassettes only; unmatched requests get a loud 502, never a silent fallthrough |
-| `verify -- <cmd>` | starts `serve`, runs your test command against it, reports which cassettes were (and weren't) used |
+| `verify [--strict] -- <cmd>` | starts `serve`, runs your test command against it, reports which cassettes were (and weren't) used; `--strict` exits 1 when any cassette goes unused, so CI can keep recordings in step |
 | `check --target <url>` | replays every recorded request against the live API and reports drift, field by field |
 | `list` | prints the recorded interactions |
 
