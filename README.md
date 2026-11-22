@@ -91,6 +91,7 @@ mock-anything verify -- npm test          # works unchanged on the imported cass
 | `check --target <url>` | replays every recorded request against the live API and reports drift, field by field |
 | `list [--json]` | prints the recorded interactions as a table, or as a JSON array with `--json` |
 | `import <file.har>` | converts a HAR 1.2 capture (browser devtools, Proxyman, Charles, mitmproxy) into cassettes |
+| `export --har <file>` | writes the cassettes as a HAR 1.2 file for browser devtools |
 
 If a command's port is busy you get an actionable message, e.g.
 `port 8080 is already in use - pick another with --port`, for `record`, `serve` and `verify`.

@@ -4,7 +4,8 @@ const { startRecorder } = require('./recorder');
 const { startMockServer } = require('./server');
 const { runVerify } = require('./verify');
 const { runCheck } = require('./check');
-const { loadCassettes } = require('./cassettes');
+const fs = require('fs');
+const { loadCassettes, cassettesToHar } = require('./cassettes');
 const { importHarFile } = require('./har');
 const { buildRoutes } = require('./routes');
 
@@ -21,6 +22,7 @@ Usage:
   mock-anything check [--target <url>] [--dir ./mocks]
   mock-anything list [--dir ./mocks] [--json]
   mock-anything import <file.har> [--dir ./mocks]
+  mock-anything export --har <file> [--dir ./mocks]
   mock-anything --version                     print the version and exit
   mock-anything <command> --help              command-specific flags and an example
 
@@ -38,13 +40,14 @@ Commands:
             --target is only needed for old single-target cassettes)
   list     prints the recorded interactions (--json emits a JSON array for scripting)
   import   converts a HAR 1.2 capture (browser/Proxyman/Charles/mitmproxy) into cassettes
+  export   writes the cassettes as a HAR 1.2 file (open it in browser devtools)
 
 Environment:
   MOCK_ANYTHING_URL       set by verify; point your app's base URL at it
   MOCK_ANYTHING_REDACT    extra comma-separated header names to strip while recording
 `;
 
-const COMMANDS = new Set(['record', 'serve', 'verify', 'check', 'list', 'import']);
+const COMMANDS = new Set(['record', 'serve', 'verify', 'check', 'list', 'import', 'export']);
 
 // Per-command help: short usage block with the flags that command actually
 // accepts plus a copy-pasteable example. `mock-anything <command> --help`.
@@ -122,6 +125,7 @@ Example:
 
 Usage:
   mock-anything import <file.har> [--dir ./mocks]
+  mock-anything export --har <file> [--dir ./mocks]
 
 Flags:
   <file.har>    HAR file to convert (positional)
@@ -130,12 +134,24 @@ Flags:
 Example:
   mock-anything import capture.har --dir ./mocks
 `,
+  export: `mock-anything export - writes cassettes as a HAR 1.2 file.
+
+Usage:
+  mock-anything export --har <file> [--dir ./mocks]
+
+Flags:
+  --har <file>  output HAR file path
+  --dir <path>  cassette root directory (default ./mocks)
+
+Example:
+  mock-anything export --har recording.har --dir ./mocks
+`,
 };
 
 // Flags parseFlags understands. When adding a flag, add it here and to USAGE;
 // anything else starting with "--" is rejected instead of silently dropped,
 // so a typo like --targt fails fast instead of causing a confusing later error.
-const KNOWN_FLAGS = new Set(['--target', '--port', '--dir', '--json', '--prefix', '--strict', '--env-var']);
+const KNOWN_FLAGS = new Set(['--target', '--port', '--dir', '--json', '--prefix', '--strict', '--env-var', '--har']);
 
 function parseFlags(args) {
   const flags = { port: 8080, dir: './mocks', json: false, strict: false, envVars: [], targets: [], prefixes: [] };
@@ -155,6 +171,11 @@ function parseFlags(args) {
       const name = args[++i];
       if (name === undefined) throw new Error('--env-var needs a variable name, e.g. --env-var VITE_API_URL');
       flags.envVars.push(name);
+    }
+    else if (a === '--har') {
+      const file = args[++i];
+      if (file === undefined) throw new Error('--har needs a file path, e.g. --har out.har');
+      flags.har = file;
     }
     else if (a.startsWith('--') && a !== '--' && !KNOWN_FLAGS.has(a)) unknown.push(a);
     else rest.push(a);
@@ -259,6 +280,17 @@ async function main(argv) {
         console.log(`imported ${w.cassette.request.method} ${w.cassette.request.path} -> ${w.cassette.response.status}  (${w.file})`);
       }
       console.log(`imported ${written.length} entries from ${harFile} into ${flags.dir}/cassettes`);
+      break;
+    }
+    case 'export': {
+      if (!flags.har) throw new Error('export needs --har <file>, e.g. mock-anything export --har out.har');
+      const cassettes = loadCassettes(flags.dir);
+      if (cassettes.length === 0) {
+        throw new Error(`no cassettes found in ${flags.dir}/cassettes - run "mock-anything record" first`);
+      }
+      const har = cassettesToHar(cassettes);
+      fs.writeFileSync(flags.har, JSON.stringify(har, null, 2) + '\n');
+      console.log(`exported ${cassettes.length} interactions to ${flags.har}`);
       break;
     }
     default:
