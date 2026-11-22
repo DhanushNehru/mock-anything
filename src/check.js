@@ -5,10 +5,20 @@ const https = require('https');
 const zlib = require('zlib');
 const { loadCassettes, decodeBody } = require('./cassettes');
 
+// A live event stream may never close; check waits at most this long for it
+// and then diffs what arrived. Override with MOCK_ANYTHING_STREAM_TIMEOUT_MS.
+function streamTimeoutMs() {
+  const raw = process.env.MOCK_ANYTHING_STREAM_TIMEOUT_MS;
+  if (raw === undefined) return 30000;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : 30000;
+}
+
 // Replays every recorded request against the live API and diffs the answers
 // against the cassettes. Catches API drift: your mocks quietly going stale.
 function fetchLive(target, cassette, livePath) {
   return new Promise((resolve) => {
+    const path = livePath || cassette.request.path;
     const transport = target.protocol === 'https:' ? https : http;
     const body = decodeBody(cassette.request);
     const headers = { ...cassette.request.headers, host: target.host };
@@ -23,14 +33,16 @@ function fetchLive(target, cassette, livePath) {
       {
         hostname: target.hostname,
         port: target.port || (target.protocol === 'https:' ? 443 : 80),
-        path: livePath || cassette.request.path,
+        path,
         method: cassette.request.method,
         headers,
       },
       (res) => {
         const chunks = [];
-        res.on('data', (c) => chunks.push(c));
-        res.on('end', () => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
           let body = Buffer.concat(chunks);
           const encoding = res.headers['content-encoding'];
           try {
@@ -41,7 +53,16 @@ function fetchLive(target, cassette, livePath) {
             // compare raw bytes if decoding fails
           }
           resolve({ status: res.statusCode, body });
-        });
+        };
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', finish);
+        res.on('error', finish);
+        if (cassette.response.stream) {
+          // A stream that never ends must not hang check forever.
+          const timer = setTimeout(finish, streamTimeoutMs());
+          res.on('end', () => clearTimeout(timer));
+          res.on('error', () => clearTimeout(timer));
+        }
       }
     );
     req.on('error', (err) => resolve({ status: 0, body: Buffer.from(String(err)) }));
@@ -88,6 +109,11 @@ function diffBodies(recordedEntry, liveBody) {
       // fall through to byte comparison
     }
   }
+  if (recordedEntry.stream) {
+    // Event streams drift on content, not on how the server happened to
+    // split the bytes into chunks, so compare the joined text.
+    return recordedBody === liveText ? [] : ['event stream body differs'];
+  }
   return recordedBody === liveText ? [] : ['body differs (non-JSON response)'];
 }
 
@@ -114,7 +140,7 @@ async function runCheck({ target, dir }) {
     const livePath = up && up.path ? up.path : cassette.request.path;
     const live = await fetchLive(liveTarget, cassette, livePath);
     const tag = up ? ` [${up.name || 'default'}]` : '';
-    const label = `${cassette.request.method} ${cassette.request.path}${tag}`;
+    const label = `${cassette.request.method} ${cassette.request.path}${tag}${cassette.response.stream ? ' (stream)' : ''}`;
     if (live.status !== cassette.response.status) {
       drifted += 1;
       console.log(`DRIFT ${label}: status ${cassette.response.status} -> ${live.status || 'request failed'}`);
