@@ -1,0 +1,28 @@
+{
+  "name": "mock-anything",
+  "version": "0.1.0",
+  "description": "Record real API traffic, replay it as a local mock server, and prove your tests pass offline.",
+  "license": "MIT",
+  "type": "commonjs",
+  "bin": {
+    "mock-anything": "bin/mock-anything.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "mock-server",
+    "testing",
+    "api-mocking",
+    "record-and-replay",
+    "offline-testing",
+    "http"
+  ],
+  "files": [
+    "bin/",
+    "src/"
+  ]
+}
