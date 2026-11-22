@@ -5,6 +5,7 @@ const https = require('https');
 const zlib = require('zlib');
 const { saveCassette } = require('./cassettes');
 const { redactHeaders } = require('./redact');
+const { matchRoute, upstreamPath, singleRoute } = require('./routes');
 
 const TEXTUAL = /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded)|image\/svg)/;
 
@@ -28,7 +29,7 @@ function isTextual(contentType) {
   return !contentType || TEXTUAL.test(contentType);
 }
 
-function forwardRequest(target, req, body, upstreamPath, callback) {
+function forwardRequest(target, req, body, upstreamPathValue, callback) {
   const transport = target.protocol === 'https:' ? https : http;
   const headers = {};
   for (const [name, value] of Object.entries(req.headers)) {
@@ -39,7 +40,7 @@ function forwardRequest(target, req, body, upstreamPath, callback) {
     {
       hostname: target.hostname,
       port: target.port || (target.protocol === 'https:' ? 443 : 80),
-      path: upstreamPath,
+      path: upstreamPathValue,
       method: req.method,
       headers,
     },
@@ -57,7 +58,7 @@ function filterUpstreamHeaders(headers) {
   return out;
 }
 
-function saveExchange(dir, req, reqBody, status, resHeaders, resBody, resType, stream) {
+function saveExchange(dir, req, reqBody, status, resHeaders, resBody, resType, stream, upstreamMeta) {
   const reqType = req.headers['content-type'] || '';
   const cassette = {
     request: {
@@ -82,6 +83,9 @@ function saveExchange(dir, req, reqBody, status, resHeaders, resBody, resType, s
     cassette.response.chunks = stream.chunks;
     if (stream.truncated) cassette.response.truncated = true;
   }
+  // In multi-upstream sessions every cassette records which upstream it
+  // came from, so serve/check can route and replay it correctly later.
+  if (upstreamMeta) cassette.upstream = upstreamMeta;
   return saveCassette(dir, cassette);
 }
 
@@ -89,7 +93,7 @@ function saveExchange(dir, req, reqBody, status, resHeaders, resBody, resType, s
 // each chunk (with the gap since the previous chunk) in arrival order. The
 // cassette is written when the upstream closes the stream, or as `truncated`
 // when the upstream dies mid-stream.
-function recordEventStream(upstream, req, reqBody, res, dir, onSaved) {
+function recordEventStream(upstream, req, reqBody, res, dir, upstreamMeta, onSaved) {
   const resHeaders = filterUpstreamHeaders(upstream.headers);
   res.writeHead(upstream.statusCode, resHeaders);
 
@@ -118,7 +122,8 @@ function recordEventStream(upstream, req, reqBody, res, dir, onSaved) {
       resHeaders,
       resBody,
       resType,
-      { chunks, truncated }
+      { chunks, truncated },
+      upstreamMeta
     );
     onSaved();
     console.log(`recorded ${req.method} ${req.url} -> ${upstream.statusCode} (stream, ${chunks.length} chunks${truncated ? ', truncated' : ''})  (${file})`);
@@ -132,8 +137,11 @@ function recordEventStream(upstream, req, reqBody, res, dir, onSaved) {
   });
 }
 
-function startRecorder({ target, port, dir }) {
-  const targetUrl = new URL(target);
+function startRecorder({ target, routes, port, dir }) {
+  // routes: [{ name, url: URL, prefix }] from src/routes. A plain `target`
+  // string keeps the original single-upstream behaviour.
+  const table = routes || singleRoute(target);
+  const multi = table.length > 1;
   let count = 0;
 
   const server = http.createServer((req, res) => {
@@ -141,15 +149,28 @@ function startRecorder({ target, port, dir }) {
     req.on('data', (c) => chunks.push(c));
     req.on('end', () => {
       const reqBody = Buffer.concat(chunks);
-      forwardRequest(targetUrl, req, reqBody, req.url, (upstream) => {
+      const route = matchRoute(table, req.url);
+      if (!route) {
+        res.writeHead(502, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          error: `mock-anything has no route for ${req.url}`,
+          routes: table.map((r) => (r.prefix ? `${r.prefix} -> ${r.url.href}` : r.url.href)),
+        }));
+        return;
+      }
+      const upPath = upstreamPath(route, req.url);
+      const upstreamMeta = multi
+        ? { name: route.name, target: route.url.href, prefix: route.prefix, path: upPath }
+        : undefined;
+      forwardRequest(route.url, req, reqBody, upPath, (upstream) => {
         if (!upstream) {
           res.writeHead(502, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ error: `mock-anything could not reach ${target}` }));
+          res.end(JSON.stringify({ error: `mock-anything could not reach ${route.url.href}` }));
           return;
         }
         const resType = upstream.headers['content-type'] || '';
         if (isEventStream(resType)) {
-          recordEventStream(upstream, req, reqBody, res, dir, () => count += 1);
+          recordEventStream(upstream, req, reqBody, res, dir, upstreamMeta, () => count += 1);
           return;
         }
         const resChunks = [];
@@ -169,7 +190,7 @@ function startRecorder({ target, port, dir }) {
           const resHeaders = filterUpstreamHeaders(upstream.headers);
           res.writeHead(upstream.statusCode, resHeaders);
           res.end(resBody);
-          const file = saveExchange(dir, req, reqBody, upstream.statusCode, resHeaders, resBody, resType);
+          const file = saveExchange(dir, req, reqBody, upstream.statusCode, resHeaders, resBody, resType, undefined, upstreamMeta);
           count += 1;
           console.log(`recorded ${req.method} ${req.url} -> ${upstream.statusCode}  (${file})`);
         });
@@ -180,9 +201,12 @@ function startRecorder({ target, port, dir }) {
   return new Promise((resolve, reject) => {
     server.on('error', reject);
     server.listen(port, () => {
-      console.log(`mock-anything record: forwarding http://localhost:${port} -> ${target}`);
+      console.log(`mock-anything record: forwarding http://localhost:${port}`);
+      for (const r of table) {
+        console.log(`  ${r.prefix ? `${r.prefix} -> ` : ''}${r.url.href}${r.name ? `  (${r.name})` : '  (default)'}`);
+      }
       console.log(`point your app's API base URL at http://localhost:${port} and exercise it. Ctrl-C to stop.`);
-      resolve({ server, count: () => count });
+      resolve({ server, count: () => count, routes: table });
     });
   });
 }

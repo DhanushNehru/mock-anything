@@ -80,7 +80,7 @@ mock-anything verify -- npm test          # works unchanged on the imported cass
 
 | command | what it does |
 |---|---|
-| `record --target <url>` | forwarding proxy that records every request and response to `mocks/cassettes/` |
+| `record --target <url>` | forwarding proxy that records every request and response to `mocks/cassettes/`; repeat `--target name=<url> --prefix name=/path` to front several upstreams from one recorder |
 | `serve` | answers from cassettes only; unmatched requests get a loud 502, never a silent fallthrough |
 | `verify -- <cmd>` | starts `serve`, runs your test command against it, reports which cassettes were (and weren't) used |
 | `check --target <url>` | replays every recorded request against the live API and reports drift, field by field |
@@ -117,7 +117,7 @@ The demo API is fast and nearby, so the gap is modest. Against a real third-part
 
 ## How it works
 
-- **Recording** is a forwarding proxy, not an SDK. Any language, any HTTP client: if your app can take a base URL, it can be recorded. Gzip, deflate and brotli responses are decoded before storage, so cassettes stay human-readable.
+- **Recording** is a forwarding proxy, not an SDK. Any language, any HTTP client: if your app can take a base URL, it can be recorded. Gzip, deflate and brotli responses are decoded before storage, so cassettes stay human-readable. One recorder can front several upstreams, routed by path prefix (see below).
 - **Cassettes** are one JSON file per exchange in `mocks/cassettes/`, matched on method + full path + canonical request body (JSON key order doesn't matter). Repeated identical requests replay in recorded order.
 - **Credentials never land in cassettes.** `authorization`, `cookie`, `x-api-key` and friends are stored as `<redacted>`; add your own with `MOCK_ANYTHING_REDACT="x-tenant-secret,x-session"`. Cassettes are meant to be committed, and this keeps them safe to commit.
 - **Serving has no fallback.** The mock server contains no code path that talks to the recorded API. A request it doesn't recognize fails loudly with the list of things it does know, which is exactly what you want from a test double.
@@ -143,10 +143,34 @@ The demo API is fast and nearby, so the gap is modest. Against a real third-part
 On replay, `serve` writes the chunks one by one with the recorded pacing (each gap capped at 100 ms; set `MOCK_ANYTHING_STREAM_MAX_DELAY_MS=0` to replay instantly), so the client sees the same event framing instead of one buffered write. Normal buffered responses are untouched and still arrive with `content-length`.
 
 A stream ends when the upstream closes it. If the upstream dies or the client disconnects mid-stream, the cassette is kept with `"truncated": true` and whatever chunks arrived. `check` replays a recorded stream against the live API and compares the joined text (chunk splitting is transport detail, not drift); a live stream that never closes is compared after `MOCK_ANYTHING_STREAM_TIMEOUT_MS` (default 30000 ms).
+## Multiple upstreams in one recording
+
+Real apps call several third-party APIs in one test run. Give each upstream a name and a local path prefix, plus at most one plain `--target <url>` as the default route for everything else:
+
+```sh
+mock-anything record --target api=https://api.stripe.com --prefix api=/stripe \
+                     --target auth=https://auth.example.com --prefix auth=/auth \
+                     --target https://api.myapp.dev \
+                     --port 8080
+```
+
+The longest matching prefix wins, and the prefix is stripped before forwarding: `GET /stripe/v1/charges` goes to `https://api.stripe.com/v1/charges`, while `GET /api/user/7` goes to the default route untouched. A prefix matches its exact path and subpaths (`/stripe`, `/stripe/...`) but never a string-extension sibling (`/stripey`). A request no route matches gets a loud 502 listing the routes — never a silent fallthrough.
+
+Each cassette records where it came from, so replay and drift-check route correctly with no extra flags:
+
+```json
+"upstream": { "name": "api", "target": "https://api.stripe.com", "prefix": "/stripe", "path": "/v1/charges" }
+```
+
+- `serve` matches on the full local path, so `/stripe/...` and `/auth/...` replay from their own cassettes. `list` shows each cassette's upstream.
+- `check` sends every cassette to the upstream it was recorded from (using the stripped path) — `mock-anything check --dir ./mocks` works with no `--target` at all. `--target` is still required for cassettes recorded the old single-target way, which carry no `upstream` field.
+- Existing single-target usage is unchanged: `record --target <url>` behaves exactly as before and its cassettes have no `upstream` field.
+
+
 
 ## What it doesn't do yet
 
-- HTTP only, one upstream per recorder. WebSockets and GraphQL subscriptions aren't recorded.
+- HTTP only. WebSockets and GraphQL subscriptions aren't recorded.
 - Matching is exact on path and body; there's no fuzzy or partial matching, and no scripted responses.
 - Request bodies with non-JSON content types match byte-for-byte.
 
