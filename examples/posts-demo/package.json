@@ -1,0 +1,9 @@
+{
+  "name": "posts-demo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Tiny example app used in the mock-anything README walkthrough",
+  "scripts": {
+    "test": "node --test *.test.js"
+  }
+}
