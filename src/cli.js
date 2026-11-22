@@ -2,6 +2,7 @@
 
 const { startRecorder } = require('./recorder');
 const { startMockServer } = require('./server');
+const { runVerify } = require('./verify');
 const { loadCassettes } = require('./cassettes');
 
 const USAGE = `mock-anything - record real API traffic, replay it offline, prove your tests still pass.
@@ -9,11 +10,13 @@ const USAGE = `mock-anything - record real API traffic, replay it offline, prove
 Usage:
   mock-anything record --target <url> [--port 8080] [--dir ./mocks]
   mock-anything serve [--port 8080] [--dir ./mocks]
+  mock-anything verify [--port 8080] [--dir ./mocks] -- <test command>
   mock-anything list [--dir ./mocks]
 
 Commands:
   record   forward proxy: records every request/response to cassettes
   serve    answers from cassettes only; never touches the network
+  verify   starts serve, runs your test command against it, reports cassette coverage
   list     prints the recorded interactions
 
 Environment:
@@ -38,6 +41,16 @@ async function main(argv) {
   const command = argv[0];
   if (!command || command === 'help' || command === '--help' || command === '-h') {
     process.stdout.write(USAGE);
+    return;
+  }
+
+  if (command === 'verify') {
+    const sep = argv.indexOf('--');
+    if (sep === -1 || sep === argv.length - 1) {
+      throw new Error('verify needs a test command after "--", e.g. mock-anything verify -- npm test');
+    }
+    const { flags } = parseFlags(argv.slice(1, sep));
+    await runVerify({ port: flags.port, dir: flags.dir, command: argv.slice(sep + 1) });
     return;
   }
 
