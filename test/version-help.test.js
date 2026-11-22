@@ -64,6 +64,7 @@ test('command help documents that command only, not the global command list', as
   assert.doesNotMatch(recordHelp, /mock-anything serve/);
   const verifyHelp = await captureMain(['verify', '--help']);
   assert.match(verifyHelp, /-- <test command>/);
+  assert.match(verifyHelp, /--strict/);
 });
 
 test('help wins over other flags for a command, but verify keeps its -- separator', async () => {

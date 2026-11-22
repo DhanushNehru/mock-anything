@@ -84,7 +84,7 @@ mock-anything verify -- npm test          # works unchanged on the imported cass
 |---|---|
 | `record --target <url>` | forwarding proxy that records every request and response to `mocks/cassettes/`; repeat `--target name=<url> --prefix name=/path` to front several upstreams from one recorder |
 | `serve` | answers from cassettes only; unmatched requests get a loud 502, never a silent fallthrough |
-| `verify -- <cmd>` | starts `serve`, runs your test command against it, reports which cassettes were (and weren't) used |
+| `verify [--strict] -- <cmd>` | starts `serve`, runs your test command against it, reports which cassettes were (and weren't) used; `--strict` exits 1 when any cassette goes unused, so CI can keep recordings in step |
 | `check --target <url>` | replays every recorded request against the live API and reports drift, field by field |
 | `list [--json]` | prints the recorded interactions as a table, or as a JSON array with `--json` |
 | `import <file.har>` | converts a HAR 1.2 capture (browser devtools, Proxyman, Charles, mitmproxy) into cassettes |

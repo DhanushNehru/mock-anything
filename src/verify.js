@@ -19,7 +19,7 @@ function waitForServer(port, tries = 50) {
   });
 }
 
-async function runVerify({ port, dir, command }) {
+async function runVerify({ port, dir, command, strict = false }) {
   const mock = await startMockServer({ port, dir });
   await waitForServer(port);
   const url = `http://localhost:${port}`;
@@ -49,6 +49,14 @@ async function runVerify({ port, dir, command }) {
     console.log('PASS: the suite ran entirely against recorded responses');
   } else {
     console.log(`FAIL: the command exited with code ${code}`);
+  }
+  // --strict: unused cassettes fail the run even when the suite passed, so
+  // stale recordings cannot pile up in CI unnoticed. A failing suite keeps
+  // its own (non-zero) exit code.
+  if (strict && stats.unused.length > 0) {
+    console.log(`FAIL: --strict: ${stats.unused.length} of ${stats.total} cassette(s) were never requested`);
+    process.exitCode = code !== 0 ? code : 1;
+    return process.exitCode;
   }
   process.exitCode = code;
   return code;
