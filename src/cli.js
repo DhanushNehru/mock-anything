@@ -38,9 +38,15 @@ Environment:
   MOCK_ANYTHING_REDACT    extra comma-separated header names to strip while recording
 `;
 
+// Flags parseFlags understands. When adding a flag, add it here and to USAGE;
+// anything else starting with "--" is rejected instead of silently dropped,
+// so a typo like --targt fails fast instead of causing a confusing later error.
+const KNOWN_FLAGS = new Set(['--target', '--port', '--dir', '--json', '--prefix']);
+
 function parseFlags(args) {
   const flags = { port: 8080, dir: './mocks', json: false, targets: [], prefixes: [] };
   const rest = [];
+  const unknown = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--target') {
@@ -50,9 +56,16 @@ function parseFlags(args) {
     else if (a === '--port') flags.port = parseInt(args[++i], 10);
     else if (a === '--dir') flags.dir = args[++i];
     else if (a === '--json') flags.json = true;
+    else if (a.startsWith('--') && a !== '--' && !KNOWN_FLAGS.has(a)) unknown.push(a);
     else rest.push(a);
   }
-  return { flags, rest };
+  return { flags, rest, unknown };
+}
+
+function assertKnownFlags(unknown) {
+  if (unknown.length > 0) {
+    throw new Error(`unknown flag${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')}\n\n${USAGE}`);
+  }
 }
 
 async function main(argv) {
@@ -67,12 +80,14 @@ async function main(argv) {
     if (sep === -1 || sep === argv.length - 1) {
       throw new Error('verify needs a test command after "--", e.g. mock-anything verify -- npm test');
     }
-    const { flags } = parseFlags(argv.slice(1, sep));
+    const { flags, unknown } = parseFlags(argv.slice(1, sep));
+    assertKnownFlags(unknown);
     await runVerify({ port: flags.port, dir: flags.dir, command: argv.slice(sep + 1) });
     return;
   }
 
-  const { flags, rest } = parseFlags(argv.slice(1));
+  const { flags, rest, unknown } = parseFlags(argv.slice(1));
+  assertKnownFlags(unknown);
 
   switch (command) {
     case 'record':
@@ -133,4 +148,4 @@ async function main(argv) {
   }
 }
 
-module.exports = { main };
+module.exports = { main, parseFlags };
