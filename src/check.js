@@ -7,7 +7,7 @@ const { loadCassettes, decodeBody } = require('./cassettes');
 
 // Replays every recorded request against the live API and diffs the answers
 // against the cassettes. Catches API drift: your mocks quietly going stale.
-function fetchLive(target, cassette) {
+function fetchLive(target, cassette, livePath) {
   return new Promise((resolve) => {
     const transport = target.protocol === 'https:' ? https : http;
     const body = decodeBody(cassette.request);
@@ -23,7 +23,7 @@ function fetchLive(target, cassette) {
       {
         hostname: target.hostname,
         port: target.port || (target.protocol === 'https:' ? 443 : 80),
-        path: cassette.request.path,
+        path: livePath || cassette.request.path,
         method: cassette.request.method,
         headers,
       },
@@ -92,17 +92,29 @@ function diffBodies(recordedEntry, liveBody) {
 }
 
 async function runCheck({ target, dir }) {
-  const targetUrl = new URL(target);
   const cassettes = loadCassettes(dir);
   if (cassettes.length === 0) {
     throw new Error(`no cassettes found in ${dir}/cassettes`);
   }
-  console.log(`mock-anything check: replaying ${cassettes.length} recorded requests against ${target}`);
+  // Cassettes from a multi-upstream recording carry their own target; a plain
+  // --target is only needed for cassettes recorded the old single-target way.
+  const missing = cassettes.filter((c) => !c.upstream).length;
+  if (!target && missing > 0) {
+    throw new Error(`check needs --target <url>: ${missing} cassette(s) do not record which upstream they came from`);
+  }
+  const targetUrl = target ? new URL(target) : null;
+  const targets = [...new Set(cassettes.map((c) => (c.upstream ? c.upstream.target : target)).filter(Boolean))];
+  console.log(`mock-anything check: replaying ${cassettes.length} recorded requests against ${targets.join(', ')}`);
 
   let drifted = 0;
   for (const cassette of cassettes) {
-    const live = await fetchLive(targetUrl, cassette);
-    const label = `${cassette.request.method} ${cassette.request.path}`;
+    const up = cassette.upstream || null;
+    const liveTarget = up ? new URL(up.target) : targetUrl;
+    // Replay against the path the upstream actually saw (local prefix stripped).
+    const livePath = up && up.path ? up.path : cassette.request.path;
+    const live = await fetchLive(liveTarget, cassette, livePath);
+    const tag = up ? ` [${up.name || 'default'}]` : '';
+    const label = `${cassette.request.method} ${cassette.request.path}${tag}`;
     if (live.status !== cassette.response.status) {
       drifted += 1;
       console.log(`DRIFT ${label}: status ${cassette.response.status} -> ${live.status || 'request failed'}`);

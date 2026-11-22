@@ -5,6 +5,7 @@ const https = require('https');
 const zlib = require('zlib');
 const { saveCassette } = require('./cassettes');
 const { redactHeaders } = require('./redact');
+const { matchRoute, upstreamPath, singleRoute } = require('./routes');
 
 const TEXTUAL = /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded)|image\/svg)/;
 
@@ -18,7 +19,7 @@ function isTextual(contentType) {
   return !contentType || TEXTUAL.test(contentType);
 }
 
-function forwardRequest(target, req, body, callback) {
+function forwardRequest(target, req, body, upstreamPathValue, callback) {
   const transport = target.protocol === 'https:' ? https : http;
   const headers = {};
   for (const [name, value] of Object.entries(req.headers)) {
@@ -29,7 +30,7 @@ function forwardRequest(target, req, body, callback) {
     {
       hostname: target.hostname,
       port: target.port || (target.protocol === 'https:' ? 443 : 80),
-      path: req.url,
+      path: upstreamPathValue,
       method: req.method,
       headers,
     },
@@ -39,8 +40,11 @@ function forwardRequest(target, req, body, callback) {
   upstream.end(body);
 }
 
-function startRecorder({ target, port, dir }) {
-  const targetUrl = new URL(target);
+function startRecorder({ target, routes, port, dir }) {
+  // routes: [{ name, url: URL, prefix }] from src/routes. A plain `target`
+  // string keeps the original single-upstream behaviour.
+  const table = routes || singleRoute(target);
+  const multi = table.length > 1;
   let count = 0;
 
   const server = http.createServer((req, res) => {
@@ -48,10 +52,25 @@ function startRecorder({ target, port, dir }) {
     req.on('data', (c) => chunks.push(c));
     req.on('end', () => {
       const reqBody = Buffer.concat(chunks);
-      forwardRequest(targetUrl, req, reqBody, (upstream) => {
+      const route = matchRoute(table, req.url);
+      if (!route) {
+        res.writeHead(502, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          error: `mock-anything has no route for ${req.url}`,
+          routes: table.map((r) => (r.prefix ? `${r.prefix} -> ${r.url.href}` : r.url.href)),
+        }));
+        return;
+      }
+      const upPath = upstreamPath(route, req.url);
+      // In multi-upstream sessions every cassette records which upstream it
+      // came from, so serve/check can route and replay it correctly later.
+      const upstreamMeta = multi
+        ? { name: route.name, target: route.url.href, prefix: route.prefix, path: upPath }
+        : undefined;
+      forwardRequest(route.url, req, reqBody, upPath, (upstream) => {
         if (!upstream) {
           res.writeHead(502, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ error: `mock-anything could not reach ${target}` }));
+          res.end(JSON.stringify({ error: `mock-anything could not reach ${route.url.href}` }));
           return;
         }
         const resChunks = [];
@@ -93,6 +112,7 @@ function startRecorder({ target, port, dir }) {
             },
             recordedAt: new Date().toISOString(),
           };
+          if (upstreamMeta) cassette.upstream = upstreamMeta;
           const file = saveCassette(dir, cassette);
           count += 1;
           console.log(`recorded ${req.method} ${req.url} -> ${upstream.statusCode}  (${file})`);
@@ -104,9 +124,12 @@ function startRecorder({ target, port, dir }) {
   return new Promise((resolve, reject) => {
     server.on('error', reject);
     server.listen(port, () => {
-      console.log(`mock-anything record: forwarding http://localhost:${port} -> ${target}`);
+      console.log(`mock-anything record: forwarding http://localhost:${port}`);
+      for (const r of table) {
+        console.log(`  ${r.prefix ? `${r.prefix} -> ` : ''}${r.url.href}${r.name ? `  (${r.name})` : '  (default)'}`);
+      }
       console.log(`point your app's API base URL at http://localhost:${port} and exercise it. Ctrl-C to stop.`);
-      resolve({ server, count: () => count });
+      resolve({ server, count: () => count, routes: table });
     });
   });
 }
