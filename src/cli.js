@@ -14,6 +14,7 @@ Usage:
   mock-anything serve [--port 8080] [--dir ./mocks]
   mock-anything verify [--port 8080] [--dir ./mocks] -- <test command>
   mock-anything check --target <url> [--dir ./mocks]
+  mock-anything list [--dir ./mocks] [--json]
   mock-anything list [--dir ./mocks]
   mock-anything import <file.har> [--dir ./mocks]
 
@@ -22,7 +23,7 @@ Commands:
   serve    answers from cassettes only; never touches the network
   verify   starts serve, runs your test command against it, reports cassette coverage
   check    replays recordings against the live API and reports drift
-  list     prints the recorded interactions
+  list     prints the recorded interactions (--json emits a JSON array for scripting)
   import   converts a HAR 1.2 capture (browser/Proxyman/Charles/mitmproxy) into cassettes
 
 Environment:
@@ -31,13 +32,14 @@ Environment:
 `;
 
 function parseFlags(args) {
-  const flags = { port: 8080, dir: './mocks' };
+  const flags = { port: 8080, dir: './mocks', json: false };
   const rest = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--target') flags.target = args[++i];
     else if (a === '--port') flags.port = parseInt(args[++i], 10);
     else if (a === '--dir') flags.dir = args[++i];
+    else if (a === '--json') flags.json = true;
     else rest.push(a);
   }
   return { flags, rest };
@@ -78,6 +80,19 @@ async function main(argv) {
       break;
     case 'list': {
       const cassettes = loadCassettes(flags.dir);
+      if (flags.json) {
+        // Machine-readable output for scripting: a JSON array and nothing
+        // else on stdout, so `mock-anything list --json | jq` works.
+        const rows = cassettes.map((c) => ({
+          method: c.request.method,
+          path: c.request.path,
+          status: c.response.status,
+          file: c.file,
+          recordedAt: c.recordedAt,
+        }));
+        process.stdout.write(JSON.stringify(rows, null, 2) + '\n');
+        return;
+      }
       if (cassettes.length === 0) {
         console.log(`no cassettes found in ${flags.dir}/cassettes`);
         return;
