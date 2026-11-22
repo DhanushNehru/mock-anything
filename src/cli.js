@@ -3,6 +3,7 @@
 const { startRecorder } = require('./recorder');
 const { startMockServer } = require('./server');
 const { runVerify } = require('./verify');
+const { runCheck } = require('./check');
 const { loadCassettes } = require('./cassettes');
 
 const USAGE = `mock-anything - record real API traffic, replay it offline, prove your tests still pass.
@@ -11,12 +12,14 @@ Usage:
   mock-anything record --target <url> [--port 8080] [--dir ./mocks]
   mock-anything serve [--port 8080] [--dir ./mocks]
   mock-anything verify [--port 8080] [--dir ./mocks] -- <test command>
+  mock-anything check --target <url> [--dir ./mocks]
   mock-anything list [--dir ./mocks]
 
 Commands:
   record   forward proxy: records every request/response to cassettes
   serve    answers from cassettes only; never touches the network
   verify   starts serve, runs your test command against it, reports cassette coverage
+  check    replays recordings against the live API and reports drift
   list     prints the recorded interactions
 
 Environment:
@@ -66,6 +69,10 @@ async function main(argv) {
       console.log(`mock-anything serve: ${mock.stats().total} recorded interactions on http://localhost:${flags.port}`);
       break;
     }
+    case 'check':
+      if (!flags.target) throw new Error('check needs --target <url>');
+      await runCheck({ target: flags.target, dir: flags.dir });
+      break;
     case 'list': {
       const cassettes = loadCassettes(flags.dir);
       if (cassettes.length === 0) {
