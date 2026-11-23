@@ -23,6 +23,7 @@ mock-anything record --target https://api.example.com --port 8080
 #    in another shell, run the suite against the recorder:
 API_BASE_URL=http://localhost:8080 npm test
 
+# Stop the recorder with Ctrl-C before verify reuses port 8080.
 # 2. later, prove the suite passes offline
 mock-anything verify -- npm test
 ```
@@ -62,7 +63,7 @@ mock-anything verify -- npm test           # sets MOCK_ANYTHING_URL for the test
 ```python
 # config.py
 import os
-BASE_URL = os.environ.get("MOCK_ANYTHING_URL", "https://api.example.com")
+BASE_URL = os.environ.get("MOCK_ANYTHING_URL") or os.environ.get("BASE_URL") or "https://api.example.com"
 ```
 
 ```python
