@@ -20,7 +20,7 @@ generate, or post-process cassettes without reading `src/cassettes.js`.
 |---|---|---|---|
 | `request` | object | yes | the recorded request (below) |
 | `response` | object | yes | the recorded response (below) |
-| `recordedAt` | string | yes | ISO 8601 UTC timestamp of when the exchange was recorded, e.g. `"2026-11-22T06:30:07.085Z"` |
+| `recordedAt` | string | no (for replay) | ISO 8601 UTC timestamp of when the exchange was recorded, e.g. `"2026-11-22T06:30:07.085Z"` |
 | `upstream` | object | no | only on cassettes from a multi-upstream `record` session: `{ "name", "target", "prefix", "path" }` — which upstream the request was routed to and the path after the prefix. **HAR import does not store `upstream` metadata.** |
 
 `file` and `key` are added in memory by `list`/`serve`; they are not stored in
@@ -90,8 +90,13 @@ network.
 }
 ```
 
-The smallest hand-written cassette needs only `request.method`, `request.path`,
-`response.status`, and `response.body` — headers, bodies and encodings default
-sensibly when omitted. `mock-anything list --dir ./mocks` shows what a
-directory contains; `mock-anything check --target <url>` replays cassettes
-against the live API to detect drift.
+The smallest hand-written cassette needs `request.method`, `request.path`,
+`response.status`, and `response.headers` (use `{}` if empty). Request headers,
+bodies and body encodings may be omitted; bodies default to empty strings and
+encodings to UTF-8. `recordedAt` is written by the recorder but is not required
+for replay. Repeated matching requests use each cassette in order, then keep
+replaying the last cassette.
+
+`mock-anything list --dir ./mocks` shows what a directory contains;
+`mock-anything check --target <url>` replays cassettes against the live API to
+detect drift.
